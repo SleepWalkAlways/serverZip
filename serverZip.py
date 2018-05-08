@@ -1,9 +1,9 @@
 
 __author__="Jack Chan"
-__date__ ="2016-6-2 15:15:15"
+__date__ ="2018-5-5 15:15:15"
 
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 """Support module for extract zip (Common Gateway Interface) scripts.
 
@@ -44,8 +44,6 @@ class ParseServerZip:
         self.directory_size = None
         self.tableOfContents = None
 
-
-
     @property
     def url(self):
         return self._url
@@ -70,20 +68,23 @@ class ParseServerZip:
         self.directory_end = self.raw_bytes.find(b"\x50\x4b\x05\x06")
 
 
-    def __file_exists(self):
+    def __file_exists(self, is_transfer):
         # check if file exists
         try:
             headRequest = requests.head(self._url)
+            if is_transfer:
+                toward_url = headRequest.headers['Location']
+                headRequest.close()
+                headRequest = requests.head(toward_url)
             self.filesize = int(headRequest.headers['Content-Length'])
-            if 'Accept-Ranges' not in headRequest.headers:
+            if 'Accept-Ranges' not in headRequest.headers and 'Content-Length' not in headRequest.headers:
                 raise NotSupportException('request is not support Range')
             return True
         except Exception as e:
-            print (e)
             return False
 
-    def getDirectorySize(self):
-        if not self.__file_exists():
+    def getDirectorySize(self, is_transfer):
+        if not self.__file_exists(is_transfer):
             raise NotSupportException('file is not support Range')
 
         # now request bytes from that size minus a 64kb max zip directory length
@@ -106,13 +107,13 @@ class ParseServerZip:
 
         return self.directory_size
 
-    def getTableOfContents(self):
+    def getTableOfContents(self, is_transfer=False):
         """
         This function populates the internal tableOfContents list with the contents
         of the zip file TOC.
         """
 
-        self.directory_size = self.getDirectorySize()
+        self.directory_size = self.getDirectorySize(is_transfer)
 
         if self.directory_size > 65536:
             self.requestContentDirectory()
